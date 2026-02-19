@@ -29,7 +29,8 @@ import {
   CheckCircle2,
   Bookmark,
   ExternalLink,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Shield
 } from 'lucide-react';
 import { PublicApi, ApiCategory, User, ViewState, Favorite } from './types';
 import { CATEGORIES, INITIAL_MOCK_APIS } from './constants';
@@ -115,7 +116,7 @@ const App: React.FC = () => {
     setAuthError('');
     const users = JSON.parse(localStorage.getItem('platform_users') || '[]');
     if (users.find((u: any) => u.email === authForm.email)) {
-      setAuthError('Email already registered');
+      setAuthError('Account already exists with this email.');
       return;
     }
 
@@ -131,7 +132,7 @@ const App: React.FC = () => {
     
     setCurrentUser(newUser);
     localStorage.setItem('current_user', JSON.stringify(newUser));
-    localStorage.setItem('auth_token', 'simulated_jwt_token_' + newUser.id);
+    localStorage.setItem('auth_token', 'jwt_' + newUser.id);
     setView('dashboard');
   };
 
@@ -145,11 +146,11 @@ const App: React.FC = () => {
       const { password, ...safeUser } = user;
       setCurrentUser(safeUser);
       localStorage.setItem('current_user', JSON.stringify(safeUser));
-      localStorage.setItem('auth_token', 'simulated_jwt_token_' + user.id);
+      localStorage.setItem('auth_token', 'jwt_' + user.id);
       loadFavorites(user.id);
       setView('dashboard');
     } else {
-      setAuthError('Invalid credentials');
+      setAuthError('Invalid credentials. Please try again.');
     }
   };
 
@@ -185,7 +186,7 @@ const App: React.FC = () => {
   const handleRefresh = useCallback(async () => {
     setLoading(true);
     try {
-      const categoryToSearch = selectedCategory === ApiCategory.ALL ? 'Developer' : selectedCategory;
+      const categoryToSearch = selectedCategory === ApiCategory.ALL ? 'Most Useful' : selectedCategory;
       const result = await discoverNewApis(categoryToSearch);
       
       const newApis: PublicApi[] = result.apis.map((a, i) => ({
@@ -195,8 +196,8 @@ const App: React.FC = () => {
       }));
 
       setApis(prev => {
-        const existingKeys = new Set(prev.map(p => `${p.name}-${p.website}`));
-        const uniqueNew = newApis.filter(n => !existingKeys.has(`${n.name}-${n.website}`));
+        const existingKeys = new Set(prev.map(p => `${p.name.toLowerCase()}-${p.website.toLowerCase()}`));
+        const uniqueNew = newApis.filter(n => !existingKeys.has(`${n.name.toLowerCase()}-${n.website.toLowerCase()}`));
         const updatedList = [...uniqueNew, ...prev].slice(0, 100);
         localStorage.setItem('discovered_apis', JSON.stringify(updatedList));
         return updatedList;
@@ -207,7 +208,7 @@ const App: React.FC = () => {
         localStorage.setItem('discovery_sources', JSON.stringify(result.sources));
       }
 
-      // Background summarization for top 2
+      // Summarize first few new entries
       newApis.slice(0, 2).forEach(async (api) => {
         const summary = await summarizeApi(api.name, api.description);
         setApis(current => current.map(c => c.name === api.name ? { ...c, ai_summary: summary } : c));
@@ -238,14 +239,14 @@ const App: React.FC = () => {
   // --- Render Helpers ---
   const renderNavbar = () => (
     <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-      scrolled ? 'bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 py-3' : 'py-6'
+      scrolled ? 'bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-gray-100 dark:border-slate-800 py-3 shadow-sm' : 'py-6'
     }`}>
       <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
         <div 
           className="flex items-center space-x-2 cursor-pointer group"
           onClick={() => { setView('landing'); setSelectedCategory(ApiCategory.ALL); }}
         >
-          <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-brand-500/20 group-hover:scale-110 transition-transform">
+          <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-brand-500/20 group-hover:rotate-12 transition-transform">
             <Zap size={22} fill="white" />
           </div>
           <span className="text-xl font-extrabold tracking-tight text-gray-900 dark:text-white">
@@ -269,9 +270,12 @@ const App: React.FC = () => {
               >
                 <Bookmark size={20} fill={favorites.length > 0 ? "currentColor" : "none"} className={favorites.length > 0 ? "text-brand-500" : ""} />
               </button>
-              <div className="hidden md:block text-right">
-                <p className="text-xs font-bold text-gray-900 dark:text-white">{currentUser.username}</p>
-                <p className="text-[10px] text-gray-500 dark:text-slate-500">{favorites.length} Saved APIs</p>
+              <div className="hidden md:flex flex-col text-right">
+                <div className="flex items-center space-x-1 justify-end">
+                   <span className="text-xs font-bold text-gray-900 dark:text-white">{currentUser.username}</span>
+                   <Shield size={10} className="text-brand-500" />
+                </div>
+                <p className="text-[10px] text-gray-500 dark:text-slate-500">{favorites.length} Saved</p>
               </div>
               <button onClick={handleLogout} className="p-2.5 rounded-xl hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-900/20 text-gray-500 transition-all">
                 <LogOut size={20} />
@@ -280,7 +284,7 @@ const App: React.FC = () => {
           ) : (
             <div className="flex items-center space-x-2">
               <button onClick={() => setView('login')} className="px-4 py-2 text-sm font-bold text-gray-600 dark:text-slate-400 hover:text-brand-600">Log in</button>
-              <button onClick={() => setView('signup')} className="px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-bold rounded-xl shadow-xl shadow-black/5 active:scale-95 transition-all">Sign up</button>
+              <button onClick={() => setView('signup')} className="px-5 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-bold rounded-xl shadow-xl shadow-black/5 hover:scale-105 active:scale-95 transition-all">Sign up</button>
             </div>
           )}
         </div>
@@ -297,56 +301,57 @@ const App: React.FC = () => {
         </button>
         
         <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">
-          {view === 'login' ? 'Welcome Back' : 'Create Account'}
+          {view === 'login' ? 'Welcome Back' : 'Join APIDir'}
         </h2>
-        <p className="text-gray-500 dark:text-slate-400 text-sm mb-8">
-          {view === 'login' ? 'Discover the best APIs for your next project.' : 'Join developers discovering the best tools.'}
+        <p className="text-gray-500 dark:text-slate-400 text-sm mb-8 leading-relaxed">
+          {view === 'login' ? 'Continue discovering the best APIs for your projects.' : 'Create an account to save and categorize your favorite APIs.'}
         </p>
 
         {authError && (
-          <div className="mb-6 p-3 bg-rose-50 dark:bg-rose-900/20 text-rose-600 text-sm rounded-xl border border-rose-100 dark:border-rose-900/50 flex items-center">
-            <X size={16} className="mr-2" /> {authError}
+          <div className="mb-6 p-4 bg-rose-50 dark:bg-rose-900/10 text-rose-600 text-xs font-bold rounded-xl border border-rose-100 dark:border-rose-900/20 flex items-center">
+            <X size={16} className="mr-3 flex-shrink-0" /> {authError}
           </div>
         )}
 
         <form onSubmit={view === 'login' ? handleLogin : handleSignup} className="space-y-5">
           {view === 'signup' && (
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Username</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Username</label>
               <div className="relative">
                 <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input required type="text" className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-slate-800 border border-transparent focus:border-brand-500 rounded-2xl outline-none text-gray-900 dark:text-white" placeholder="johndoe"
+                <input required type="text" className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-slate-800/50 border border-transparent focus:border-brand-500 rounded-2xl outline-none text-gray-900 dark:text-white transition-all shadow-inner" placeholder="johndoe"
                   value={authForm.username} onChange={e => setAuthForm({...authForm, username: e.target.value})} />
               </div>
             </div>
           )}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Email Address</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input required type="email" className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-slate-800 border border-transparent focus:border-brand-500 rounded-2xl outline-none text-gray-900 dark:text-white" placeholder="name@company.com"
+              <input required type="email" className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-slate-800/50 border border-transparent focus:border-brand-500 rounded-2xl outline-none text-gray-900 dark:text-white transition-all shadow-inner" placeholder="name@company.com"
                 value={authForm.email} onChange={e => setAuthForm({...authForm, email: e.target.value})} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Password</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Password</label>
             <div className="relative">
               <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input required type="password" minLength={6} className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-slate-800 border border-transparent focus:border-brand-500 rounded-2xl outline-none text-gray-900 dark:text-white" placeholder="••••••••"
+              <input required type="password" minLength={6} className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-slate-800/50 border border-transparent focus:border-brand-500 rounded-2xl outline-none text-gray-900 dark:text-white transition-all shadow-inner" placeholder="••••••••"
                 value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} />
             </div>
           </div>
 
-          <button type="submit" className="w-full py-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-2xl shadow-xl shadow-brand-500/20 transition-all active:scale-[0.98] mt-4">
-            {view === 'login' ? 'Sign In' : 'Create Account'}
+          <button type="submit" className="w-full py-5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-2xl shadow-xl shadow-brand-500/20 transition-all active:scale-[0.98] mt-4 flex items-center justify-center group">
+            {view === 'login' ? 'Log In' : 'Create Account'}
+            <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
           </button>
         </form>
 
         <div className="mt-8 pt-8 border-t border-gray-100 dark:border-slate-800 text-center text-sm">
           <p className="text-gray-500 dark:text-slate-400">
-            {view === 'login' ? "Don't have an account?" : "Already have an account?"}
+            {view === 'login' ? "New to the platform?" : "Already have an account?"}
             <button onClick={() => setView(view === 'login' ? 'signup' : 'login')} className="ml-2 text-brand-600 font-bold hover:underline">
-              {view === 'login' ? 'Get started' : 'Log in instead'}
+              {view === 'login' ? 'Sign up free' : 'Log in here'}
             </button>
           </p>
         </div>
@@ -358,7 +363,7 @@ const App: React.FC = () => {
     <div className="pt-32 pb-20 px-6">
       <section className="max-w-4xl mx-auto text-center mb-16">
         <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-8">
-          {view === 'favorites' ? 'Your Saved Toolkit' : 'The AI-Powered API Directory'}
+          {view === 'favorites' ? 'Your Curated Toolkit' : 'Verified API Directory'}
         </h1>
         
         <div className="relative max-w-2xl mx-auto group">
@@ -368,7 +373,7 @@ const App: React.FC = () => {
             <input
               type="text"
               className="w-full pl-14 pr-6 py-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-2xl shadow-black/5 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all text-gray-900 dark:text-white text-lg"
-              placeholder="Search verified APIs (e.g. 'Stripe', 'Twilio')..."
+              placeholder="Filter by name or keywords..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -376,7 +381,7 @@ const App: React.FC = () => {
               <button 
                 onClick={handleRefresh} 
                 disabled={loading}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition-colors shadow-lg shadow-brand-500/20"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 transition-colors shadow-lg shadow-brand-500/20 active:scale-95"
               >
                 {loading ? <RefreshCw size={18} className="animate-spin" /> : <Sparkles size={18} />}
               </button>
@@ -395,7 +400,7 @@ const App: React.FC = () => {
                 className={`flex-shrink-0 flex items-center px-6 py-3.5 rounded-2xl text-sm font-bold transition-all border ${
                   selectedCategory === cat
                     ? 'bg-brand-600 border-brand-600 text-white shadow-xl shadow-brand-500/20'
-                    : 'bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-800 text-gray-600 dark:text-slate-400 hover:border-brand-200 dark:hover:border-slate-700'
+                    : 'bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-800 text-gray-600 dark:text-slate-400 hover:border-brand-200 dark:hover:border-slate-700 active:scale-95'
                 }`}
               >
                 <span className={`mr-2.5 ${selectedCategory === cat ? 'text-white' : 'text-brand-500'}`}>
@@ -412,9 +417,9 @@ const App: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center">
             <Layers size={22} className="mr-3 text-brand-600" />
-            {view === 'favorites' ? 'Saved Collections' : `${selectedCategory} Discovery`}
+            {view === 'favorites' ? 'Saved Collections' : `${selectedCategory} Tools`}
             <span className="ml-4 px-3 py-1 rounded-full bg-brand-50 dark:bg-brand-900/20 text-xs font-bold text-brand-600 dark:text-brand-400">
-              {filteredApis.length} Results
+              {filteredApis.length} APIs
             </span>
           </h2>
         </div>
@@ -438,41 +443,43 @@ const App: React.FC = () => {
                 {view === 'favorites' ? <Heart size={40} className="text-rose-400" /> : <Database size={40} />}
               </div>
               <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {view === 'favorites' ? 'No saved APIs yet' : 'No matches found'}
+                {view === 'favorites' ? 'No bookmarks yet' : 'No matches found'}
               </h3>
-              <p className="text-gray-500 dark:text-slate-400 mt-2 max-w-md mx-auto">
+              <p className="text-gray-500 dark:text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
                 {view === 'favorites' 
-                  ? "Start saving tools you're interested in and they'll appear here."
-                  : "Try a different search or refresh to discover new APIs."}
+                  ? "Browse the directory and click the bookmark icon to save tools to your library."
+                  : "Try clearing your filters or refreshing the page to see more results."}
               </p>
             </div>
           )}
         </div>
 
-        {/* Discovery Sources Grounding (Required) */}
         {discoverySources.length > 0 && view !== 'favorites' && (
-          <div className="mt-12 p-8 bg-gray-50 dark:bg-slate-900/30 rounded-3xl border border-gray-100 dark:border-slate-800">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+          <div className="mt-12 p-8 bg-brand-50/50 dark:bg-slate-900/30 rounded-3xl border border-brand-100 dark:border-slate-800 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
+                <Globe size={120} className="text-brand-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center relative z-10">
               <LinkIcon size={18} className="mr-3 text-brand-600" />
-              Verified Discovery Sources
+              Verified Knowledge Sources
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
               {discoverySources.map((source, i) => (
                 <a 
                   key={i}
                   href={source.uri} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="flex items-center p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 hover:border-brand-500 transition-all group"
+                  className="flex items-center p-4 bg-white dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl border border-gray-100 dark:border-slate-700 hover:border-brand-500 hover:shadow-xl hover:shadow-brand-500/5 transition-all group/source"
                 >
-                  <div className="w-8 h-8 flex-shrink-0 bg-gray-50 dark:bg-slate-700 rounded-lg flex items-center justify-center text-gray-400 group-hover:text-brand-600 transition-colors">
-                    <Globe size={16} />
+                  <div className="w-10 h-10 flex-shrink-0 bg-brand-50 dark:bg-slate-700 rounded-xl flex items-center justify-center text-brand-600 transition-colors">
+                    <Globe size={18} />
                   </div>
-                  <div className="ml-3 overflow-hidden">
-                    <p className="text-sm font-bold text-gray-700 dark:text-slate-300 truncate">{source.title}</p>
-                    <p className="text-[10px] text-gray-400 truncate">{source.uri}</p>
+                  <div className="ml-4 overflow-hidden">
+                    <p className="text-sm font-bold text-gray-800 dark:text-slate-200 truncate">{source.title}</p>
+                    <p className="text-[10px] text-gray-400 truncate tracking-wide">{source.uri}</p>
                   </div>
-                  <ExternalLink size={12} className="ml-auto text-gray-300 group-hover:text-brand-500" />
+                  <ExternalLink size={12} className="ml-auto text-gray-300 group-hover/source:text-brand-500 transition-colors" />
                 </a>
               ))}
             </div>
@@ -485,34 +492,42 @@ const App: React.FC = () => {
   const renderLanding = () => (
     <div className="pt-40 pb-20">
       <section className="max-w-5xl mx-auto px-6 text-center">
-        <div className="inline-flex items-center px-4 py-2 rounded-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 text-sm font-bold mb-8">
+        <div className="inline-flex items-center px-4 py-2 rounded-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 text-sm font-bold mb-10 animate-fade-in">
           <CheckCircle2 size={16} className="mr-2" />
-          The largest verified API directory on the web
+          The most complete public API indexer
         </div>
-        <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-8 leading-[1.1]">
-          Find the perfect <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-indigo-600">Public API</span> for your app.
+        <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-8 leading-[1.05]">
+          Discovery for <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-indigo-600">Modern Developers.</span>
         </h1>
-        <p className="text-xl text-gray-500 dark:text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">
-          Verified, production-ready public APIs indexed in real-time by AI. Find your next integration in seconds.
+        <p className="text-xl text-gray-500 dark:text-slate-400 mb-12 max-w-2xl mx-auto leading-relaxed">
+          The ultimate verified index of programmatic tools. AI-powered searching and categorization to supercharge your workflow.
         </p>
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <button 
             onClick={() => setView('dashboard')}
-            className="w-full sm:w-auto px-10 py-5 bg-brand-600 text-white rounded-2xl font-bold text-lg hover:bg-brand-700 shadow-2xl shadow-brand-500/20 transition-all active:scale-95 flex items-center justify-center"
+            className="w-full sm:w-auto px-12 py-5 bg-brand-600 text-white rounded-2xl font-bold text-lg hover:bg-brand-700 shadow-2xl shadow-brand-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center group"
           >
-            Explore Directory
-            <ArrowRight size={20} className="ml-2" />
+            Launch Directory
+            <ArrowRight size={20} className="ml-2 group-hover:translate-x-1 transition-transform" />
           </button>
           {!currentUser && (
             <button 
               onClick={() => setView('signup')}
-              className="w-full sm:w-auto px-10 py-5 bg-white dark:bg-slate-900 text-gray-900 dark:text-white rounded-2xl font-bold text-lg border border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all active:scale-95"
+              className="w-full sm:w-auto px-12 py-5 bg-white dark:bg-slate-900 text-gray-900 dark:text-white rounded-2xl font-bold text-lg border border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all hover:scale-105 active:scale-95"
             >
-              Sign up free
+              Start Curating
             </button>
           )}
+        </div>
+
+        <div className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-8 grayscale opacity-30 dark:invert transition-all hover:grayscale-0 hover:opacity-100 duration-1000">
+           {['Stripe', 'Twilio', 'Github', 'Postman'].map(b => (
+             <div key={b} className="flex items-center justify-center text-3xl font-black text-gray-400 tracking-tighter">
+               {b}
+             </div>
+           ))}
         </div>
       </section>
     </div>
@@ -526,22 +541,24 @@ const App: React.FC = () => {
       {(view === 'dashboard' || view === 'favorites') && renderDashboard()}
       
       <footer className="py-20 px-6 border-t border-gray-100 dark:border-slate-900 bg-white/50 dark:bg-slate-950/50">
-        <div className="max-w-7xl mx-auto text-center">
-          <div className="flex items-center justify-center space-x-2 mb-8">
+        <div className="max-w-7xl mx-auto flex flex-col items-center">
+          <div className="flex items-center space-x-2 mb-8">
             <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white"><Zap size={16} fill="white" /></div>
             <span className="text-xl font-bold text-gray-900 dark:text-white">APIDir.</span>
           </div>
-          <p className="text-gray-500 dark:text-slate-400 mb-8 max-w-md mx-auto">
-            Discover and integrate the world's most useful public APIs. Verified daily by AI.
+          <p className="text-gray-500 dark:text-slate-400 mb-10 text-center max-w-sm leading-relaxed">
+            The world's most useful public APIs, indexed and verified daily by advanced AI models.
           </p>
-          <div className="flex justify-center space-x-8 text-sm font-bold text-gray-400 mb-12">
+          <div className="flex flex-wrap justify-center gap-x-12 gap-y-6 text-sm font-bold text-gray-500 dark:text-slate-400 mb-12">
             <a href="#" className="hover:text-brand-600 transition-colors">Documentation</a>
-            <a href="#" className="hover:text-brand-600 transition-colors">Privacy</a>
+            <a href="#" className="hover:text-brand-600 transition-colors">Developer Blog</a>
+            <a href="#" className="hover:text-brand-600 transition-colors">Submit API</a>
             <a href="#" className="hover:text-brand-600 transition-colors">Twitter</a>
             <a href="#" className="hover:text-brand-600 transition-colors">GitHub</a>
           </div>
-          <div className="text-xs text-gray-400">
-            © 2024 APIDir Directory. Powered by Gemini 3 Flash.
+          <div className="pt-8 border-t border-gray-100 dark:border-slate-800 w-full flex flex-col md:flex-row justify-between items-center text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+            <span>© 2024 APIDir Directory Service</span>
+            <span className="mt-4 md:mt-0 flex items-center"><Sparkles size={14} className="mr-2 text-brand-500" /> Engine: Gemini-3 Flash Preview</span>
           </div>
         </div>
       </footer>

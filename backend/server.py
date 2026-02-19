@@ -5,19 +5,19 @@ Technologies: FastAPI, SQLAlchemy, SQLite, Pydantic, Bcrypt, JWT
 """
 
 import datetime
+import os
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 
 # Configuration
-SECRET_KEY = "your-deep-secret-key"
+SECRET_KEY = os.getenv("JWT_SECRET", "your-deep-secret-key-for-development")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440 # 24 Hours
 
@@ -56,8 +56,14 @@ class FavoriteDB(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# Security
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Security Helpers (Updated for Python 3.13+ compatibility)
+def hash_password(password: str) -> str:
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def get_db():
@@ -95,7 +101,7 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    hashed_pass = pwd_context.hash(user.password)
+    hashed_pass = hash_password(user.password)
     new_user = UserDB(username=user.username, email=user.email, hashed_password=hashed_pass)
     db.add(new_user)
     db.commit()
@@ -107,7 +113,7 @@ async def signup(user: UserCreate, db: Session = Depends(get_db)):
 @app.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.email == form_data.username).first()
-    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     
     access_token = create_access_token(data={"sub": user.email})

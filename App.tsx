@@ -27,7 +27,9 @@ import {
   ChevronRight,
   ArrowRight,
   CheckCircle2,
-  Bookmark
+  Bookmark,
+  ExternalLink,
+  Link as LinkIcon
 } from 'lucide-react';
 import { PublicApi, ApiCategory, User, ViewState, Favorite } from './types';
 import { CATEGORIES, INITIAL_MOCK_APIS } from './constants';
@@ -56,6 +58,7 @@ const App: React.FC = () => {
   
   // Data State
   const [apis, setApis] = useState<PublicApi[]>([]);
+  const [discoverySources, setDiscoverySources] = useState<{title: string, uri: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>(ApiCategory.ALL);
@@ -75,6 +78,9 @@ const App: React.FC = () => {
       setApis(INITIAL_MOCK_APIS);
       localStorage.setItem('discovered_apis', JSON.stringify(INITIAL_MOCK_APIS));
     }
+
+    const savedSources = localStorage.getItem('discovery_sources');
+    if (savedSources) setDiscoverySources(JSON.parse(savedSources));
 
     const session = localStorage.getItem('auth_token');
     const savedUser = localStorage.getItem('current_user');
@@ -109,7 +115,7 @@ const App: React.FC = () => {
     setAuthError('');
     const users = JSON.parse(localStorage.getItem('platform_users') || '[]');
     if (users.find((u: any) => u.email === authForm.email)) {
-      setAuthError('Email already exists');
+      setAuthError('Email already registered');
       return;
     }
 
@@ -123,7 +129,6 @@ const App: React.FC = () => {
     const usersWithPass = [...users, { ...newUser, password: authForm.password }];
     localStorage.setItem('platform_users', JSON.stringify(usersWithPass));
     
-    // Simulate Login
     setCurrentUser(newUser);
     localStorage.setItem('current_user', JSON.stringify(newUser));
     localStorage.setItem('auth_token', 'simulated_jwt_token_' + newUser.id);
@@ -144,7 +149,7 @@ const App: React.FC = () => {
       loadFavorites(user.id);
       setView('dashboard');
     } else {
-      setAuthError('Invalid email or password');
+      setAuthError('Invalid credentials');
     }
   };
 
@@ -180,7 +185,7 @@ const App: React.FC = () => {
   const handleRefresh = useCallback(async () => {
     setLoading(true);
     try {
-      const categoryToSearch = selectedCategory === ApiCategory.ALL ? 'Most Popular' : selectedCategory;
+      const categoryToSearch = selectedCategory === ApiCategory.ALL ? 'Developer' : selectedCategory;
       const result = await discoverNewApis(categoryToSearch);
       
       const newApis: PublicApi[] = result.apis.map((a, i) => ({
@@ -197,7 +202,12 @@ const App: React.FC = () => {
         return updatedList;
       });
 
-      // Async background summarization
+      if (result.sources && result.sources.length > 0) {
+        setDiscoverySources(result.sources);
+        localStorage.setItem('discovery_sources', JSON.stringify(result.sources));
+      }
+
+      // Background summarization for top 2
       newApis.slice(0, 2).forEach(async (api) => {
         const summary = await summarizeApi(api.name, api.description);
         setApis(current => current.map(c => c.name === api.name ? { ...c, ai_summary: summary } : c));
@@ -290,7 +300,7 @@ const App: React.FC = () => {
           {view === 'login' ? 'Welcome Back' : 'Create Account'}
         </h2>
         <p className="text-gray-500 dark:text-slate-400 text-sm mb-8">
-          {view === 'login' ? 'Discover the best APIs for your next project.' : 'Join 50,000+ developers discovering APIs.'}
+          {view === 'login' ? 'Discover the best APIs for your next project.' : 'Join developers discovering the best tools.'}
         </p>
 
         {authError && (
@@ -346,7 +356,6 @@ const App: React.FC = () => {
 
   const renderDashboard = () => (
     <div className="pt-32 pb-20 px-6">
-      {/* Search & Header */}
       <section className="max-w-4xl mx-auto text-center mb-16">
         <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-8">
           {view === 'favorites' ? 'Your Saved Toolkit' : 'The AI-Powered API Directory'}
@@ -376,7 +385,6 @@ const App: React.FC = () => {
         </div>
       </section>
 
-      {/* Categories */}
       {view !== 'favorites' && (
         <div className="max-w-7xl mx-auto mb-16 overflow-x-auto no-scrollbar py-2">
           <div className="flex flex-nowrap md:flex-wrap items-center justify-start md:justify-center gap-3">
@@ -400,7 +408,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Grid */}
       <section className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center">
@@ -412,7 +419,7 @@ const App: React.FC = () => {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-20">
           {loading ? (
             Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)
           ) : filteredApis.length > 0 ? (
@@ -435,17 +442,42 @@ const App: React.FC = () => {
               </h3>
               <p className="text-gray-500 dark:text-slate-400 mt-2 max-w-md mx-auto">
                 {view === 'favorites' 
-                  ? "Start saving tools you're interested in and they'll appear here for quick access."
-                  : "We couldn't find any tools matching your filters. Try a different category or discover new ones."}
+                  ? "Start saving tools you're interested in and they'll appear here."
+                  : "Try a different search or refresh to discover new APIs."}
               </p>
-              {view !== 'favorites' && (
-                <button onClick={handleRefresh} className="mt-8 px-8 py-3 bg-brand-600 text-white rounded-2xl font-bold hover:bg-brand-700 shadow-xl shadow-brand-500/20 transition-all">
-                  Refresh Discovery
-                </button>
-              )}
             </div>
           )}
         </div>
+
+        {/* Discovery Sources Grounding (Required) */}
+        {discoverySources.length > 0 && view !== 'favorites' && (
+          <div className="mt-12 p-8 bg-gray-50 dark:bg-slate-900/30 rounded-3xl border border-gray-100 dark:border-slate-800">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+              <LinkIcon size={18} className="mr-3 text-brand-600" />
+              Verified Discovery Sources
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {discoverySources.map((source, i) => (
+                <a 
+                  key={i}
+                  href={source.uri} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 hover:border-brand-500 transition-all group"
+                >
+                  <div className="w-8 h-8 flex-shrink-0 bg-gray-50 dark:bg-slate-700 rounded-lg flex items-center justify-center text-gray-400 group-hover:text-brand-600 transition-colors">
+                    <Globe size={16} />
+                  </div>
+                  <div className="ml-3 overflow-hidden">
+                    <p className="text-sm font-bold text-gray-700 dark:text-slate-300 truncate">{source.title}</p>
+                    <p className="text-[10px] text-gray-400 truncate">{source.uri}</p>
+                  </div>
+                  <ExternalLink size={12} className="ml-auto text-gray-300 group-hover:text-brand-500" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
@@ -462,7 +494,7 @@ const App: React.FC = () => {
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-indigo-600">Public API</span> for your app.
         </h1>
         <p className="text-xl text-gray-500 dark:text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">
-          Stop digging through GitHub and outdated lists. Our AI discovery engine crawls the web to bring you verified, production-ready public APIs in real-time.
+          Verified, production-ready public APIs indexed in real-time by AI. Find your next integration in seconds.
         </p>
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -473,35 +505,14 @@ const App: React.FC = () => {
             Explore Directory
             <ArrowRight size={20} className="ml-2" />
           </button>
-          <button 
-            onClick={() => setView('signup')}
-            className="w-full sm:w-auto px-10 py-5 bg-white dark:bg-slate-900 text-gray-900 dark:text-white rounded-2xl font-bold text-lg border border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all active:scale-95"
-          >
-            Join the Community
-          </button>
-        </div>
-
-        <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8 grayscale opacity-50 dark:invert">
-          {['Stripe', 'Twilio', 'GitHub', 'AWS'].map(brand => (
-            <div key={brand} className="flex items-center justify-center p-4 bg-gray-50 rounded-2xl font-bold text-2xl text-gray-400">
-              {brand}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Featured Grid */}
-      <section className="max-w-7xl mx-auto px-6 mt-32">
-        <div className="flex items-center justify-between mb-12">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Trending Toolkits</h2>
-          <button onClick={() => setView('dashboard')} className="text-brand-600 font-bold flex items-center hover:underline">
-            View All APIs <ChevronRight size={18} />
-          </button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {apis.slice(0, 3).map(api => (
-            <ApiCard key={api.id} api={api} currentUser={currentUser} onToggleFavorite={toggleFavorite} isFavorited={favorites.includes(api.id)} />
-          ))}
+          {!currentUser && (
+            <button 
+              onClick={() => setView('signup')}
+              className="w-full sm:w-auto px-10 py-5 bg-white dark:bg-slate-900 text-gray-900 dark:text-white rounded-2xl font-bold text-lg border border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all active:scale-95"
+            >
+              Sign up free
+            </button>
+          )}
         </div>
       </section>
     </div>
@@ -515,41 +526,23 @@ const App: React.FC = () => {
       {(view === 'dashboard' || view === 'favorites') && renderDashboard()}
       
       <footer className="py-20 px-6 border-t border-gray-100 dark:border-slate-900 bg-white/50 dark:bg-slate-950/50">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 text-sm">
-          <div className="col-span-1 md:col-span-2">
-            <div className="flex items-center space-x-2 mb-6">
-              <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white"><Zap size={16} fill="white" /></div>
-              <span className="text-xl font-bold text-gray-900 dark:text-white">APIDir.</span>
-            </div>
-            <p className="text-gray-500 dark:text-slate-400 max-w-xs mb-8">
-              Empowering developers to discover the world's best programmatic interfaces through AI-driven search and verified documentation.
-            </p>
-            <div className="flex space-x-4">
-              <Github className="text-gray-400 hover:text-brand-600 cursor-pointer" />
-              <Layers className="text-gray-400 hover:text-brand-600 cursor-pointer" />
-            </div>
+        <div className="max-w-7xl mx-auto text-center">
+          <div className="flex items-center justify-center space-x-2 mb-8">
+            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white"><Zap size={16} fill="white" /></div>
+            <span className="text-xl font-bold text-gray-900 dark:text-white">APIDir.</span>
           </div>
-          <div>
-            <h4 className="font-bold text-gray-900 dark:text-white mb-6">Directory</h4>
-            <ul className="space-y-4 text-gray-500 dark:text-slate-400">
-              <li className="hover:text-brand-600 cursor-pointer" onClick={() => setView('dashboard')}>Popular APIs</li>
-              <li className="hover:text-brand-600 cursor-pointer" onClick={() => setView('dashboard')}>AI Category</li>
-              <li className="hover:text-brand-600 cursor-pointer" onClick={() => setView('dashboard')}>Developer Tools</li>
-              <li className="hover:text-brand-600 cursor-pointer" onClick={() => setView('dashboard')}>Verified only</li>
-            </ul>
+          <p className="text-gray-500 dark:text-slate-400 mb-8 max-w-md mx-auto">
+            Discover and integrate the world's most useful public APIs. Verified daily by AI.
+          </p>
+          <div className="flex justify-center space-x-8 text-sm font-bold text-gray-400 mb-12">
+            <a href="#" className="hover:text-brand-600 transition-colors">Documentation</a>
+            <a href="#" className="hover:text-brand-600 transition-colors">Privacy</a>
+            <a href="#" className="hover:text-brand-600 transition-colors">Twitter</a>
+            <a href="#" className="hover:text-brand-600 transition-colors">GitHub</a>
           </div>
-          <div>
-            <h4 className="font-bold text-gray-900 dark:text-white mb-6">Legal</h4>
-            <ul className="space-y-4 text-gray-500 dark:text-slate-400">
-              <li className="hover:text-brand-600 cursor-pointer">Privacy Policy</li>
-              <li className="hover:text-brand-600 cursor-pointer">Terms of Service</li>
-              <li className="hover:text-brand-600 cursor-pointer">Cookie Settings</li>
-            </ul>
+          <div className="text-xs text-gray-400">
+            © 2024 APIDir Directory. Powered by Gemini 3 Flash.
           </div>
-        </div>
-        <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-gray-100 dark:border-slate-900 flex justify-between items-center text-xs text-gray-400">
-          <span>© 2024 APIDir Platform. All rights reserved.</span>
-          <span className="flex items-center"><Sparkles size={12} className="mr-1 text-brand-500" /> Powered by Gemini-3 Flash</span>
         </div>
       </footer>
     </div>

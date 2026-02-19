@@ -26,7 +26,8 @@ import {
   Key,
   ChevronRight,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  Bookmark
 } from 'lucide-react';
 import { PublicApi, ApiCategory, User, ViewState, Favorite } from './types';
 import { CATEGORIES, INITIAL_MOCK_APIS } from './constants';
@@ -68,8 +69,12 @@ const App: React.FC = () => {
   // Initial Load
   useEffect(() => {
     const savedApis = localStorage.getItem('discovered_apis');
-    if (savedApis) setApis(JSON.parse(savedApis));
-    else setApis(INITIAL_MOCK_APIS);
+    if (savedApis) {
+      setApis(JSON.parse(savedApis));
+    } else {
+      setApis(INITIAL_MOCK_APIS);
+      localStorage.setItem('discovered_apis', JSON.stringify(INITIAL_MOCK_APIS));
+    }
 
     const session = localStorage.getItem('auth_token');
     const savedUser = localStorage.getItem('current_user');
@@ -252,11 +257,11 @@ const App: React.FC = () => {
                 className={`p-2.5 rounded-xl transition-all ${view === 'favorites' ? 'bg-brand-50 text-brand-600 dark:bg-brand-900/30' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800'}`}
                 title="Favorites"
               >
-                <Heart size={20} fill={favorites.length > 0 ? "currentColor" : "none"} className={favorites.length > 0 ? "text-rose-500" : ""} />
+                <Bookmark size={20} fill={favorites.length > 0 ? "currentColor" : "none"} className={favorites.length > 0 ? "text-brand-500" : ""} />
               </button>
               <div className="hidden md:block text-right">
                 <p className="text-xs font-bold text-gray-900 dark:text-white">{currentUser.username}</p>
-                <p className="text-[10px] text-gray-500 dark:text-slate-500">Member since {new Date(currentUser.created_at).getFullYear()}</p>
+                <p className="text-[10px] text-gray-500 dark:text-slate-500">{favorites.length} Saved APIs</p>
               </div>
               <button onClick={handleLogout} className="p-2.5 rounded-xl hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-900/20 text-gray-500 transition-all">
                 <LogOut size={20} />
@@ -527,10 +532,10 @@ const App: React.FC = () => {
           <div>
             <h4 className="font-bold text-gray-900 dark:text-white mb-6">Directory</h4>
             <ul className="space-y-4 text-gray-500 dark:text-slate-400">
-              <li className="hover:text-brand-600 cursor-pointer">Popular APIs</li>
-              <li className="hover:text-brand-600 cursor-pointer">AI Category</li>
-              <li className="hover:text-brand-600 cursor-pointer">Developer Tools</li>
-              <li className="hover:text-brand-600 cursor-pointer">Verified only</li>
+              <li className="hover:text-brand-600 cursor-pointer" onClick={() => setView('dashboard')}>Popular APIs</li>
+              <li className="hover:text-brand-600 cursor-pointer" onClick={() => setView('dashboard')}>AI Category</li>
+              <li className="hover:text-brand-600 cursor-pointer" onClick={() => setView('dashboard')}>Developer Tools</li>
+              <li className="hover:text-brand-600 cursor-pointer" onClick={() => setView('dashboard')}>Verified only</li>
             </ul>
           </div>
           <div>
